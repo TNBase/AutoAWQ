@@ -68,7 +68,8 @@ def get_compute_capabilities():
         compute_capabilities.add(major * 10 + minor)
 
     # figure out compute capability
-    compute_capabilities = {80, 86, 89, 90}
+    # compute_capabilities = {70, 75, 80, 86, 89, 90}
+    compute_capabilities = {80}
 
     capability_flags = []
     for cap in compute_capabilities:
@@ -86,18 +87,42 @@ if os.name == "nt":
     }
 else:
     extra_compile_args={
-        "cxx": ["-g", "-O3", "-fopenmp", "-lgomp", "-std=c++17"],
-        "nvcc": ["-O3", "-std=c++17"] + arch_flags
+        "cxx": [        
+            "-g", 
+            "-O3", 
+            "-fopenmp", 
+            "-lgomp", 
+            "-std=c++17",
+            "-DENABLE_BF16"
+        ],
+        "nvcc": [        
+            "-O3", 
+            "-std=c++17",
+            "-DENABLE_BF16",  # TODO
+            "-U__CUDA_NO_HALF_OPERATORS__",
+            "-U__CUDA_NO_HALF_CONVERSIONS__",
+            "-U__CUDA_NO_BFLOAT16_OPERATORS__",
+            "-U__CUDA_NO_BFLOAT16_CONVERSIONS__",
+            "-U__CUDA_NO_BFLOAT162_OPERATORS__",
+            "-U__CUDA_NO_BFLOAT162_CONVERSIONS__",
+            "--expt-relaxed-constexpr",
+            "--expt-extended-lambda",
+            "--use_fast_math",
+            "--threads=8"
+        ] + arch_flags
     }
 
 extensions = [
     CUDAExtension(
         "awq_inference_engine",
         [
-            "awq_cuda/pybind.cpp",
-            "awq_cuda/quantization/gemm_cuda_gen.cu",
-            "awq_cuda/layernorm/layernorm.cu",
-            "awq_cuda/position_embedding/pos_encoding_kernels.cu"
+                "awq_cuda/pybind.cpp", 
+                "awq_cuda/quantization/gemm_cuda_gen.cu",
+                "awq_cuda/quantization/gemv_cuda.cu",
+                "awq_cuda/layernorm/layernorm.cu",
+                "awq_cuda/position_embedding/pos_encoding_kernels.cu",
+                "awq_cuda/attention/ft_attention.cpp",
+                "awq_cuda/attention/decoder_masked_multihead_attention.cu"
         ], extra_compile_args=extra_compile_args
     )
 ]

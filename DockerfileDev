@@ -1,0 +1,147 @@
+# -------------------------------------------------------------------------------------
+# PYTHON BASE IMAGE. 
+# Runs: Installs all dependencies required for running the reader. 
+# Entrypoint: runs the run.sh script from the reader. 
+# -------------------------------------------------------------------------------------
+# base image with cuda 11.7 (need this specifically for awq)
+FROM nvcr.io/nvidia/cuda:11.7.0-cudnn8-devel-ubuntu22.04 as python-base
+
+# install python (base image doesn't have this)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    python3-dev \
+    python3-pip \
+    wget \
+    git \
+    socat \
+    && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /root
+
+# Install MKL & ONEDNN For ct2 CPU mode
+ENV ONEAPI_VERSION=2023.0.0
+ENV MKL_BUILD=25398
+RUN wget -q https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB && \
+    apt-key add *.PUB && \
+    rm *.PUB && \
+    echo "deb https://apt.repos.intel.com/oneapi all main" > /etc/apt/sources.list.d/oneAPI.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+    intel-oneapi-mkl-devel=$ONEAPI_VERSION-$MKL_BUILD \
+    && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m pip --no-cache-dir install cmake==3.22.*
+
+ENV ONEDNN_VERSION=3.1.1
+RUN wget -q https://github.com/oneapi-src/oneDNN/archive/refs/tags/v${ONEDNN_VERSION}.tar.gz && \
+    tar xf *.tar.gz && \
+    rm *.tar.gz && \
+    cd oneDNN-* && \
+    cmake -DCMAKE_BUILD_TYPE=Release -DONEDNN_LIBRARY_TYPE=STATIC -DONEDNN_BUILD_EXAMPLES=OFF -DONEDNN_BUILD_TESTS=OFF -DONEDNN_ENABLE_WORKLOAD=INFERENCE -DONEDNN_ENABLE_PRIMITIVE="CONVOLUTION;REORDER" -DONEDNN_BUILD_GRAPH=OFF . && \
+    make -j$(nproc) install && \
+    cd .. && \
+    rm -r oneDNN-*
+
+WORKDIR /code
+
+RUN mkdir /code/models
+
+# install ct2
+# why not do the installation form source?
+# I couldnt get this to work with the cuda 11.7 version that we need to get
+# awq to work. Enough tinkering could get it to work, but I don't think its worth it.
+RUN pip install torch==2.0.1
+
+
+# 8.0 is the minimum arch needed for awq kernels to run.
+# This works I think even for more powerful archs, but there might be performance loss.
+ENV TORCH_CUDA_ARCH_LIST="8.0"
+# ENV BUILD_CUDA_EXT="1"
+# ENV TORCH_IS_PREBUILT="1"
+
+# install awq lib and kernels
+RUN pip install setuptools --upgrade
+RUN pip3 install --upgrade pip
+
+# install awq from github 
+# RUN git clone https://github.com/casper-hansen/AutoAWQ
+# RUN cd AutoAWQ && git checkout 7fbe9bbc98fc48a5b6247bd9dddf7366b82d33f3 && pip install -e .
+
+COPY /home/titan-6/AutoAWQ /code
+
+# install requirements
+COPY ./reader/requirements.txt /code/requirements.txt
+RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
+
+RUN apt update && apt install -y redis-server 
+RUN apt install -y inotify-tools
+RUN pip install supervisor
+
+
+COPY ./reader /code/reader
+
+ENTRYPOINT ["sh", "reader/run.sh"]
+
+# -------------------------------------------------------------------------------------
+# RUST BASE IMAGE.
+# Runs: installs all dependencies required for building and testing the rust gateway
+# Entrypoint: none
+# -------------------------------------------------------------------------------------
+FROM rust:1.71.1 as rust-base
+
+RUN apt update && apt install -y cmake libssl-dev pkg-config git redis-server
+RUN cargo install cargo-watch
+
+RUN mkdir -p /home/app/gateway
+
+WORKDIR /home/app/gateway
+
+# copy the dependency manifest
+COPY gateway/Cargo.toml gateway/Cargo.lock ./
+
+COPY /gateway/tests/ ./tests
+COPY /gateway/benches/ ./benches
+
+# copy the source
+COPY gateway/src ./src
+
+COPY gateway/scripts/ ./scripts
+
+# -------------------------------------------------------------------------------------
+# RUST DEV IMAGE.
+# Runs: None
+# Entrypoint: runs the gateway in dev mode. Starts a dev loop with the redis server etc.
+# -------------------------------------------------------------------------------------
+FROM rust-base as rust-dev
+
+ENTRYPOINT redis-server --daemonize yes --protected-mode no && cargo watch -q -w src/ -x run
+
+# -------------------------------------------------------------------------------------
+# RUST BUILD IMAGE.
+# Runs: Builds the rust gateway in (optimized) release mode.
+# Entrypoint: None
+# -------------------------------------------------------------------------------------
+FROM rust-base as rust-build
+
+RUN cargo build --release
+
+# -------------------------------------------------------------------------------------
+# PROD IMAGE
+# Runs: Installs redis-server, and the supervisor process for running multiple processes
+#       at once. 
+# Entrypoint: The supervisor process. Runs the gateway, redis-server, socat (for ipv6 proxy),
+#                                     and the reader
+# -------------------------------------------------------------------------------------
+FROM python-base as prod
+
+COPY --from=rust-build /home/app/gateway/target/release/gateway /usr/local/bin/gateway
+COPY ./gateway/static ./static/
+
+
+COPY confs/supervisord.conf ./supervisord.conf
+
+ENTRYPOINT ["supervisord", "-c", "supervisord.conf"]

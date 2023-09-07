@@ -73,8 +73,8 @@ class BaseAWQForCausalLM(nn.Module):
                     **self.quant_config
                 )
 
-                scales = scales.t().contiguous()
-                zeros = zeros.t().contiguous()
+                # scales = scales.t().contiguous()
+                # zeros = zeros.t().contiguous()
 
                 q_linear = WQLinear.from_linear(
                     module, 
