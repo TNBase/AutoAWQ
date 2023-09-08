@@ -6,7 +6,8 @@ class LlamaAWQForCausalLM(BaseAWQForCausalLM):
     layer_type = "LlamaDecoderLayer"
     max_new_tokens_key = "max_position_embeddings"
 
-    def get_inference_model(self, model):
+    @staticmethod
+    def get_inference_model(model):
         return LlamaForInference(model.config)
         
     @staticmethod

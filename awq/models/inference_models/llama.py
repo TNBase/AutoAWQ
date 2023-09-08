@@ -10,7 +10,8 @@ from torch import nn
 import torch.nn.functional as F
 import awq_inference_engine
 from transformers.models.llama.modeling_llama import LlamaRotaryEmbedding
-
+from transformers.modeling_utils import PreTrainedModel
+from transformers.generation import GenerationMixin
 # from flash_attn.flash_attn_interface import flash_attn_unpadded_func
 
 max_batch_size = 2048

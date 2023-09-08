@@ -40,9 +40,9 @@ class LlamaFuser:
             elif isinstance(module, LlamaAttentionFused):
 
                 attn = QuantLlamaAttentionFused(
-                    module.hidden_size,
-                    module.num_heads,
-                    module.qkv_proj,
+                    module.args.hidden_size,
+                    module.args.num_attention_heads,
+                    qkv_layer,
                     module.o_proj,
                     next(iter(module.state_dict().values())).device,
                     module.args

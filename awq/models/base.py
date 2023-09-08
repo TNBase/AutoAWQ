@@ -50,7 +50,8 @@ class BaseAWQForCausalLM(nn.Module):
             self._awq_quant()
             self.is_quantized = True
     
-    def get_inference_model(self, model):
+    @staticmethod
+    def get_inference_model(model):
         """Load a specialized model implementation defined for inference. For example MQA and GQA models need to use ."""
         return model
     
@@ -303,7 +304,8 @@ class BaseAWQForCausalLM(nn.Module):
             # Prepare WQLinear layers, replace nn.Linear
             self._load_quantized_modules(self, model, quant_config)
         
-        model.tie_weights()
+        if hasattr(model, 'tie_weights'):
+            model.tie_weights()
 
         device_map = infer_auto_device_map(
             model,
