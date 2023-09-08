@@ -1,13 +1,15 @@
 from awq import AutoAWQForCausalLM
 from transformers import AutoTokenizer
+from huggingface_hub import login
 
-model_path = 'facebook/opt-125m'
-quant_path = 'facebook-opt-125m'
+login('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')
+model_path = 'meta-llama/Llama-2-7b-hf'
+quant_path = 'Llama-2-7b-hf'
 quant_config = { "zero_point": True, "q_group_size": 128, "w_bit": 4 }
 
 # Load model
-model = AutoAWQForCausalLM.from_pretrained(model_path)
-tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+model = AutoAWQForCausalLM.from_pretrained(model_path, token='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')
+tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True, token='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')
 
 # Quantize
 model.quantize(tokenizer, quant_config=quant_config)

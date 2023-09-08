@@ -50,6 +50,10 @@ class BaseAWQForCausalLM(nn.Module):
             self._awq_quant()
             self.is_quantized = True
     
+    def get_inference_model(self, model):
+        """Load a specialized model implementation defined for inference. For example MQA and GQA models need to use ."""
+        return model
+    
     @staticmethod
     def fuse_layers(model):
         pass
@@ -237,7 +241,7 @@ class BaseAWQForCausalLM(nn.Module):
         
     @classmethod
     def from_pretrained(self, model_path, model_type, torch_dtype: torch.dtype = torch.float16, 
-                        trust_remote_code=True, safetensors=False):
+                        trust_remote_code=True, safetensors=False, token=None):
         return self.from_quantized(
             model_path, 
             model_type, 
@@ -247,13 +251,14 @@ class BaseAWQForCausalLM(nn.Module):
             torch_dtype=torch_dtype, 
             trust_remote_code=trust_remote_code, 
             safetensors=safetensors,
-            is_quantized=False
+            is_quantized=False,
+            token=None
         )
 
     @classmethod
     def from_quantized(self, model_path, model_type, model_filename, max_new_tokens=None,
                        device='balanced', torch_dtype=torch.float16, trust_remote_code=True, 
-                       safetensors=False, is_quantized=True, fuse_layers=False):
+                       safetensors=False, is_quantized=True, fuse_layers=False, token=None):
         # [STEP 1] Download model if path is not a directory
         if not os.path.isdir(model_path):
             ignore_patterns = ["*msgpack*", "*h5*"]
@@ -262,7 +267,7 @@ class BaseAWQForCausalLM(nn.Module):
             else:
                 ignore_patterns.append("*safetensors*")
 
-            model_path = snapshot_download(model_path, ignore_patterns=ignore_patterns)
+            model_path = snapshot_download(model_path, ignore_patterns=ignore_patterns, token=token)
         
         # TODO: Better naming, model_filename becomes a directory
         model_filename = model_path + f'/{model_filename}'
@@ -279,17 +284,20 @@ class BaseAWQForCausalLM(nn.Module):
         
         # Load model config and set max generation length
         if max_new_tokens is None and hasattr(self, 'max_new_tokens_key'):
-            config = AutoConfig.from_pretrained(model_path, trust_remote_code=trust_remote_code)
+            config = AutoConfig.from_pretrained(model_path, trust_remote_code=trust_remote_code, token=token)
             config.max_new_tokens = getattr(config, self.max_new_tokens_key)
         else:
             max_new_tokens = 2048 if max_new_tokens is None else max_new_tokens
-            config = AutoConfig.from_pretrained(model_path, trust_remote_code=trust_remote_code)
+            config = AutoConfig.from_pretrained(model_path, trust_remote_code=trust_remote_code, token=token)
             config.max_new_tokens = max_new_tokens
         
         # [STEP 3] Load model
         with init_empty_weights():
             model = AutoModelForCausalLM.from_config(config=config, torch_dtype=torch_dtype, trust_remote_code=trust_remote_code)
-        
+            
+            if is_quantized:
+                model = self.get_inference_model(model)
+
         # Only need to replace layers if a model is AWQ quantized
         if is_quantized:
             # Prepare WQLinear layers, replace nn.Linear
