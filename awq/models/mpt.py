@@ -7,11 +7,6 @@ class MptAWQForCausalLM(BaseAWQForCausalLM):
     max_new_tokens_key = "max_seq_len"
 
     @staticmethod
-    def fuse_layers(model: MptForCausalLM):
-        fuser = MptFuser(model)
-        fuser.fuse_mlp()
-
-    @staticmethod
     def get_model_layers(model: MptForCausalLM):
         return model.transformer.blocks
     

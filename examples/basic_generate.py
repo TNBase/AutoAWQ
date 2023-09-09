@@ -1,7 +1,7 @@
 from awq import AutoAWQForCausalLM
 from transformers import AutoTokenizer, TextStreamer
 
-quant_path = "casperhansen/vicuna-7b-v1.5-awq"
+quant_path = 'Llama-2-7b-hf'
 quant_file = "awq_model_w4_g128.pt"
 
 # Load model

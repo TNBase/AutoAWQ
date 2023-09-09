@@ -301,7 +301,8 @@ class BaseAWQForCausalLM(nn.Module):
             # Prepare WQLinear layers, replace nn.Linear
             self._load_quantized_modules(self, model, quant_config)
         
-        model.tie_weights()
+        if hasattr(model, 'tie_weights'):
+            model.tie_weights()
 
         device_map = infer_auto_device_map(
             model,

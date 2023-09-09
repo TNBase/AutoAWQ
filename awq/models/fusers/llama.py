@@ -2,7 +2,7 @@ import torch
 from typing import List, Tuple
 from awq.quantize.qmodule import WQLinear
 from awq.utils.utils import set_module_name
-from awq.modules import QuantLlamaMLP, FTLlamaRMSNorm, QuantLlamaAttention, QuantLlamaAttentionFused
+from awq.modules import QuantLlamaMLP, FTLlamaRMSNorm, QuantLlamaAttention,
 from transformers.models.llama.modeling_llama import LlamaAttention, LlamaRMSNorm, LlamaMLP
 from ..inference_models.llama import LlamaAttentionFused
 
@@ -41,7 +41,7 @@ class LlamaFuser:
             set_module_name(self.model, name, attn)
     
     def _fuse_qkv(self, module: LlamaAttention):
-        """Turn a separate q, k, and v projection into a single qkv projection.""""
+        """Turn a separate q, k, and v projection into a single qkv projection."""
         # get qkv and bias
         q_proj, k_proj, v_proj = module.q_proj, module.k_proj, module.v_proj
         bias = torch.cat([q_proj.bias, k_proj.bias, v_proj.bias], dim=0) if q_proj.bias is not None else None
