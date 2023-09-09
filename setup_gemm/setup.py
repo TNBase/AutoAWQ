@@ -8,6 +8,7 @@ from torch.utils.cpp_extension import BuildExtension, CUDA_HOME, CUDAExtension
 os.environ["CC"] = "g++"
 os.environ["CXX"] = "g++"
 
+
 common_setup_kwargs = {
     "version": "0.0.2",
     "name": "autoawq",
@@ -67,10 +68,6 @@ def get_compute_capabilities():
             raise RuntimeError("GPUs with compute capability less than 8.0 are not supported.")
         compute_capabilities.add(major * 10 + minor)
 
-    # figure out compute capability
-    # compute_capabilities = {70, 75, 80, 86, 89, 90}
-    compute_capabilities = {80}
-
     capability_flags = []
     for cap in compute_capabilities:
         capability_flags += ["-gencode", f"arch=compute_{cap},code=sm_{cap}"]
@@ -112,17 +109,22 @@ else:
         ] + arch_flags
     }
 
+cpp_files = [
+    "awq_cuda/pybind_gemm.cpp",
+    "awq_cuda/layernorm/layernorm.cu",
+    "awq_cuda/position_embedding/pos_encoding_kernels.cu",
+    "awq_cuda/attention/ft_attention.cpp",
+    "awq_cuda/attention/decoder_masked_multihead_attention.cu"
+]
+
 extensions = [
     CUDAExtension(
         "awq_inference_engine",
         [
                 "awq_cuda/pybind.cpp", 
-                "awq_cuda/quantization/gemm_cuda_gen.cu",
-                "awq_cuda/quantization/gemv_cuda.cu",
+                "awq_cuda/quantization/gemm_cuda_gen.cu"
                 "awq_cuda/layernorm/layernorm.cu",
                 "awq_cuda/position_embedding/pos_encoding_kernels.cu",
-                "awq_cuda/attention/ft_attention.cpp",
-                "awq_cuda/attention/decoder_masked_multihead_attention.cu"
         ], extra_compile_args=extra_compile_args
     )
 ]

@@ -28,29 +28,20 @@ class LlamaFuser:
     def fuse_attention(self):
         for name, module in self.attention_modules:
             qkv_layer: WQLinear = self._fuse_qkv(module)
-            if isinstance(module, LlamaAttention):
-                attn = QuantLlamaAttention(
-                    module.hidden_size,
-                    module.num_heads,
-                    qkv_layer,
-                    module.o_proj,
-                    next(iter(qkv_layer.state_dict().values())).device,
-                )
+            
+            attn = QuantLlamaAttention(
+                module.hidden_size,
+                module.num_heads,
+                qkv_layer,
+                module.o_proj,
+                next(iter(qkv_layer.state_dict().values())).device,
+            )
 
-            elif isinstance(module, LlamaAttentionFused):
-
-                attn = QuantLlamaAttentionFused(
-                    module.hidden_size,
-                    module.num_heads,
-                    module.qkv_proj,
-                    module.o_proj,
-                    next(iter(module.state_dict().values())).device,
-                    module.args
-                )
 
             set_module_name(self.model, name, attn)
     
     def _fuse_qkv(self, module: LlamaAttention):
+        """Turn a separate q, k, and v projection into a single qkv projection.""""
         # get qkv and bias
         q_proj, k_proj, v_proj = module.q_proj, module.k_proj, module.v_proj
         bias = torch.cat([q_proj.bias, k_proj.bias, v_proj.bias], dim=0) if q_proj.bias is not None else None

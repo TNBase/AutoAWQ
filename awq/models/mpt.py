@@ -1,12 +1,15 @@
 from .base import BaseAWQForCausalLM
 from transformers.models.mpt.modeling_mpt import MptBlock, MptForCausalLM, MptMLP
-from .inference_models import MPTForCausalLM as MptForInference
+from .fusers import MptFuser
+
 class MptAWQForCausalLM(BaseAWQForCausalLM):
     layer_type = "MPTBlock"
     max_new_tokens_key = "max_seq_len"
 
-    def get_inference_model(self, model):
-        return MptForInference(model.config)
+    @staticmethod
+    def fuse_layers(model: MptForCausalLM):
+        fuser = MptFuser(model)
+        fuser.fuse_mlp()
 
     @staticmethod
     def get_model_layers(model: MptForCausalLM):

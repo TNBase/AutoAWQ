@@ -17,6 +17,8 @@ from transformers import AutoModelForCausalLM, AutoConfig, PreTrainedModel
 from accelerate import init_empty_weights, load_checkpoint_and_dispatch, infer_auto_device_map
 from awq.utils.module import append_str_prefix, get_op_name, get_named_linears, set_op_by_name
 
+USE_GEMV = os.environ.get('USE_GEMV', '0') == '1'
+
 class BaseAWQForCausalLM(nn.Module):
     def __init__(self, model, model_type, is_quantized, quant_config):
         super().__init__()
@@ -49,11 +51,7 @@ class BaseAWQForCausalLM(nn.Module):
         if run_quant:
             self._awq_quant()
             self.is_quantized = True
-    
-    def get_inference_model(self, model):
-        """Load a specialized model implementation defined for inference. For example MQA and GQA models need to use ."""
-        return model
-    
+        
     @staticmethod
     def fuse_layers(model):
         pass
@@ -77,8 +75,11 @@ class BaseAWQForCausalLM(nn.Module):
                     **self.quant_config
                 )
 
-                # scales = scales.t().contiguous()
-                # zeros = zeros.t().contiguous()
+                if not USE_GEMV:
+                    # The GEMV kernel doesn't require scales and zeros to be transposed is my guess as to why 
+                    # they did this?
+                    scales = scales.t().contiguous()
+                    zeros = zeros.t().contiguous()
 
                 q_linear = WQLinear.from_linear(
                     module, 
@@ -295,9 +296,6 @@ class BaseAWQForCausalLM(nn.Module):
         with init_empty_weights():
             model = AutoModelForCausalLM.from_config(config=config, torch_dtype=torch_dtype, trust_remote_code=trust_remote_code)
             
-            if is_quantized:
-                model = self.get_inference_model(model)
-
         # Only need to replace layers if a model is AWQ quantized
         if is_quantized:
             # Prepare WQLinear layers, replace nn.Linear

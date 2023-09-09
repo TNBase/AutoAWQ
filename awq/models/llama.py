@@ -1,13 +1,9 @@
 from .base import BaseAWQForCausalLM
 from transformers.models.llama.modeling_llama import LlamaDecoderLayer, LlamaForCausalLM
-from .inference_models import LlamaForCausalLM as LlamaForInference
 from .fusers import LlamaFuser
 class LlamaAWQForCausalLM(BaseAWQForCausalLM):
     layer_type = "LlamaDecoderLayer"
     max_new_tokens_key = "max_position_embeddings"
-
-    def get_inference_model(self, model):
-        return LlamaForInference(model.config)
         
     @staticmethod
     def fuse_layers(model: LlamaForCausalLM):

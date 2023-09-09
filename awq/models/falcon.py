@@ -1,11 +1,7 @@
 from .base import BaseAWQForCausalLM
 from transformers.models.falcon.modeling_falcon import FalconDecoderLayer, FalconForCausalLM
-from .inference_models import FalconForCausalLM as FalconForInference
 class FalconAWQForCausalLM(BaseAWQForCausalLM):
     layer_type = "FalconDecoderLayer"
-
-    def get_inference_model(self, model):
-        return FalconForInference(model.config)
 
     @staticmethod
     def get_model_layers(model: FalconForCausalLM):
