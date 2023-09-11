@@ -9,7 +9,7 @@ os.environ["CC"] = "g++"
 os.environ["CXX"] = "g++"
 
 USE_GEMV = os.environ.get("USE_GEMV", "0") == "1"
-print('USE_GEMV', USE_GEMV)
+
 common_setup_kwargs = {
     "version": "0.0.2",
     "name": "autoawq",
