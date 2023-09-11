@@ -2,7 +2,7 @@ import torch
 from typing import List, Tuple
 from awq.quantize.qmodule import WQLinear
 from awq.utils.utils import set_module_name
-from awq.modules import QuantLlamaMLP, FTLlamaRMSNorm, QuantLlamaAttention,
+from awq.modules import QuantLlamaMLP, FTLlamaRMSNorm, QuantLlamaAttention
 from transformers.models.llama.modeling_llama import LlamaAttention, LlamaRMSNorm, LlamaMLP
 from ..inference_models.llama import LlamaAttentionFused
 
@@ -32,11 +32,12 @@ class LlamaFuser:
             attn = QuantLlamaAttention(
                 module.hidden_size,
                 module.num_heads,
+                module.num_key_value_heads,
                 qkv_layer,
                 module.o_proj,
                 next(iter(qkv_layer.state_dict().values())).device,
+                self.model.config.max_new_tokens
             )
-
 
             set_module_name(self.model, name, attn)
     
