@@ -87,7 +87,17 @@ class QuantLlamaAttention(nn.Module):
         else:
             self.rotary_emb = QuantLlamaRotaryEmbedding(self.head_dim, max_position_embeddings=max_new_tokens, device = dev)
 
-    def forward(self, hidden_states, past_key_value=None, attention_mask=None, position_ids=None, output_attentions=False, use_cache=False):
+    def forward(
+            self, 
+            hidden_states, 
+            past_key_value=None, 
+            attention_mask=None, 
+            position_ids=None, 
+            output_attentions=False, 
+            use_cache=False,
+            *args, 
+            **kwargs
+        ):
         """Input shape: Batch x Time x Channel"""
 
         bsz, q_len, _ = hidden_states.size()
