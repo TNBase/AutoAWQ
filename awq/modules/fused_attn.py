@@ -104,48 +104,28 @@ class QuantLlamaAttention(nn.Module):
 
         qkv_states = self.qkv_proj(hidden_states)
 
-        if self.use_hf_rotary:
-            # get qkv
-            qkv_states = qkv_states.view(bsz, q_len, 3, self.num_heads, self.head_dim)
-            query, key, value = torch.split(qkv_states, 1, dim=2)
-            del qkv_states
-            
-            # reshape for hf rotary
-            query = query.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
-            key = key.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
-            value = value.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
+        # get qkv
+        qkv_states = qkv_states.view(bsz, q_len, 3, self.num_heads, self.head_dim)
+        query, key, value = torch.tensor_split(qkv_states, 3, dim=2)
 
-            kv_seq_len = key.shape[-2]
-            if past_key_value is not None:
-                kv_seq_len += past_key_value[0].shape[-2]
-            
-            cos, sin = self.rotary_emb(value, seq_len=kv_seq_len)
-            query, key = apply_rotary_pos_emb(query, key, cos, sin, position_ids)
+        query = query.contiguous()
+        key = key.contiguous()
+        value = value.contiguous()
 
-        else:
-            # get qkv
-            query, key, value = qkv_states.chunk(chunks=3, dim=-1)
-            del qkv_states
-
-            # [num_tokens, num_heads * head_size]
-            query_batch_size, query_len, _ = query.shape
-            query = query.view(query_len*query_batch_size, self.num_heads * self.head_dim)
-
-            # [num_tokens, num_kv_heads * head_size]
-            key_batch_size, key_len, _ = key.shape
-            key = key.view(key_len*key_batch_size, self.num_kv_heads * self.head_dim)
-
-            # [num_tokens]
-            positions = position_ids.view(-1).to(query.device)
-
-            query, key = self.rotary_emb(query, key, positions)
-
-            query = query.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
-            key = key.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
-            value = value.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
+        del qkv_states
         
-        is_causal = past_key_value is None
+        # reshape for hf rotary
+        query = query.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
+        key = key.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
+        value = value.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
 
+        kv_seq_len = key.shape[-2]
+        if past_key_value is not None:
+            kv_seq_len += past_key_value[0].shape[-2]
+        
+        cos, sin = self.rotary_emb(value, seq_len=kv_seq_len)
+        query, key = apply_rotary_pos_emb(query, key, cos, sin, position_ids)
+        
         kv_seq_len = q_len
         if past_key_value is not None:
             kv_seq_len += past_key_value[0].shape[-2]
@@ -157,21 +137,10 @@ class QuantLlamaAttention(nn.Module):
             key = torch.cat([past_key_value[0], key], dim=2)
             value = torch.cat([past_key_value[1], value], dim=2)
 
-        if use_cache:
-            # Since qkv_proj is fused, query etc will hold a reference to the original qkv_states tensor
-            # which can cause excessive memory usage by the cache. `contiguous` is a convenient way to workaround this.
-            key = key.contiguous()
-            value = value.contiguous()
-            query = query.contiguous()
-
         past_key_value = (key, value) if use_cache else None
 
-        with torch.autocast(device_type='cuda', dtype=torch.float32):
-            # with torch.backends.cuda.sdp_kernel(enable_math=False):
-            attn_output = F.scaled_dot_product_attention(query, key, value, is_causal=is_causal)
+        attn_output = F.scaled_dot_product_attention(query, key, value, attn_mask = attention_mask)
         
-        del query, key, value
-
         attn_output = attn_output.transpose(1, 2).reshape(bsz, q_len, self.hidden_size).half()
         attn_output = self.o_proj(attn_output)
 
