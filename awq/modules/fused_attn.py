@@ -4,6 +4,7 @@ import awq_inference_engine
 from torch.nn import functional as F
 from transformers.models.llama.modeling_llama import apply_rotary_pos_emb, LlamaRotaryEmbedding
 
+
 class QuantLlamaRotaryEmbedding(nn.Module):
     def __init__(self, dim, max_position_embeddings=2048, base=10000, device=None):
         super().__init__()
@@ -25,14 +26,14 @@ class QuantLlamaRotaryEmbedding(nn.Module):
         freqs = torch.einsum("i,j->ij", t, self.inv_freq)
         # Different from paper, but it uses a different permutation in order to obtain the same calculation
         emb = torch.cat((freqs, freqs), dim=-1)
-        
+
         cos = freqs.cos()
         sin = freqs.sin()
         cache = torch.cat((cos, sin), dim=-1)
-        
+
         # [max_position, rot_dim]
         self.register_buffer("cos_sin_cache", cache.half(), persistent=False)
-    
+
     def forward(
         self,
         query: torch.Tensor,
@@ -44,31 +45,15 @@ class QuantLlamaRotaryEmbedding(nn.Module):
         query = query.contiguous()
         key = key.contiguous()
 
-        awq_inference_engine.rotary_embedding(
-            positions,
-            query,
-            key,
-            self.dim,
-            self.cos_sin_cache,
-            True # is_neox
-        )
+        awq_inference_engine.rotary_embedding(positions, query, key, self.dim, self.cos_sin_cache, True)  # is_neox
 
         return query, key
+
 
 class QuantLlamaAttention(nn.Module):
     """Multi-headed attention from 'Attention Is All You Need' paper"""
 
-    def __init__(
-        self,
-        hidden_size,
-        num_heads,
-        num_kv_heads,
-        qkv_proj,
-        o_proj,
-        dev,
-        max_new_tokens,
-        use_hf_rotary=True
-    ):
+    def __init__(self, hidden_size, num_heads, num_kv_heads, qkv_proj, o_proj, dev, max_new_tokens, use_hf_rotary=True):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_heads = num_heads
@@ -77,27 +62,31 @@ class QuantLlamaAttention(nn.Module):
         self.use_hf_rotary = use_hf_rotary
 
         if (self.head_dim * num_heads) != self.hidden_size:
-            raise ValueError(f"hidden_size must be divisible by num_heads (got `hidden_size`: {self.hidden_size}"
-                             f" and `num_heads`: {num_heads}).")
+            raise ValueError(
+                f"hidden_size must be divisible by num_heads (got `hidden_size`: {self.hidden_size}"
+                f" and `num_heads`: {num_heads})."
+            )
         self.qkv_proj = qkv_proj
         self.o_proj = o_proj
 
         if use_hf_rotary:
             self.rotary_emb = LlamaRotaryEmbedding(self.head_dim, max_new_tokens, device=dev)
         else:
-            self.rotary_emb = QuantLlamaRotaryEmbedding(self.head_dim, max_position_embeddings=max_new_tokens, device = dev)
+            self.rotary_emb = QuantLlamaRotaryEmbedding(
+                self.head_dim, max_position_embeddings=max_new_tokens, device=dev
+            )
 
     def forward(
-            self, 
-            hidden_states, 
-            past_key_value=None, 
-            attention_mask=None, 
-            position_ids=None, 
-            output_attentions=False, 
-            use_cache=False,
-            *args, 
-            **kwargs
-        ):
+        self,
+        hidden_states,
+        past_key_value=None,
+        attention_mask=None,
+        position_ids=None,
+        output_attentions=False,
+        use_cache=False,
+        *args,
+        **kwargs,
+    ):
         """Input shape: Batch x Time x Channel"""
 
         bsz, q_len, _ = hidden_states.size()
@@ -113,7 +102,7 @@ class QuantLlamaAttention(nn.Module):
         value = value.contiguous()
 
         del qkv_states
-        
+
         # reshape for hf rotary
         query = query.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
         key = key.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
@@ -122,14 +111,14 @@ class QuantLlamaAttention(nn.Module):
         kv_seq_len = key.shape[-2]
         if past_key_value is not None:
             kv_seq_len += past_key_value[0].shape[-2]
-        
+
         cos, sin = self.rotary_emb(value, seq_len=kv_seq_len)
         query, key = apply_rotary_pos_emb(query, key, cos, sin, position_ids)
-        
+
         kv_seq_len = q_len
         if past_key_value is not None:
             kv_seq_len += past_key_value[0].shape[-2]
-        
+
         value = value.to(key.device)
 
         if past_key_value is not None:
@@ -139,8 +128,8 @@ class QuantLlamaAttention(nn.Module):
 
         past_key_value = (key, value) if use_cache else None
 
-        attn_output = F.scaled_dot_product_attention(query, key, value, attn_mask = attention_mask)
-        
+        attn_output = F.scaled_dot_product_attention(query, key, value, attn_mask=attention_mask)
+
         attn_output = attn_output.transpose(1, 2).reshape(bsz, q_len, self.hidden_size).half()
         attn_output = self.o_proj(attn_output)
 
