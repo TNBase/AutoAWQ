@@ -296,6 +296,7 @@ class BaseAWQForCausalLM(nn.Module):
             self._load_quantized_modules(self, model, quant_config)
         
         model.tie_weights()
+        model.to('cpu')
 
         device_map = infer_auto_device_map(
             model,
