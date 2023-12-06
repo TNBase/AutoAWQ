@@ -305,16 +305,25 @@ class BaseAWQForCausalLM(nn.Module):
 
         model_loc = os.path.dirname(model_filename)
 
+        loc_has_index_json = False
+        # look for the an index.json in this file.
+        for filename in os.listdir(model_loc):
+            if filename.endswith('.index.json'):
+                loc_has_index_json = True
+        
+        if not loc_has_index_json:
+            model_loc = model_filename
+
+
         # Load model weights
         if is_quantized:
             model = load_checkpoint_and_dispatch(
                 model, 
                 model_loc, 
-                device_map=device_map, 
+                device_map='balanced', 
                 no_split_module_classes=[self.layer_type]
             )
 
-        
             for obj in gc.get_objects():
                 try:
                     if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
