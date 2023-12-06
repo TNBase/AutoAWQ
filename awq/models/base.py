@@ -303,11 +303,13 @@ class BaseAWQForCausalLM(nn.Module):
             dtype=torch_dtype
         )
 
+        model_loc = os.path.dirname(model_filename)
+
         # Load model weights
         if is_quantized:
             model = load_checkpoint_and_dispatch(
                 model, 
-                model_filename, 
+                model_loc, 
                 device_map='auto', 
                 no_split_module_classes=[self.layer_type]
             )
