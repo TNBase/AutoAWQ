@@ -2,7 +2,7 @@ from .base import BaseAWQForCausalLM
 
 
 class QwenAWQForCausalLM(BaseAWQForCausalLM):
-    layer_type = "QWenBlock"
+    layer_type = "QwenBlock"
     max_new_tokens_key = "seq_length"
 
     @staticmethod

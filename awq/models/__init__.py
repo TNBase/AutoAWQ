@@ -5,3 +5,5 @@ from .falcon import FalconAWQForCausalLM
 from .bloom import BloomAWQForCausalLM
 from .gptj import GPTJAWQForCausalLM
 from .mistral import MistralAWQForCausalLM
+from .yi import YiAWQForCausalLM
+from .qwen import QwenAWQForCausalLM
