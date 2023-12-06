@@ -5,10 +5,6 @@ from .base import BaseAWQForCausalLM
 class YiAWQForCausalLM(BaseAWQForCausalLM):
     layer_type = "YiDecoderLayer"
     max_new_tokens_key = "max_position_embeddings"
-
-    @staticmethod
-    def fuse_layers(model):
-        pass
         
     @staticmethod
     def get_model_layers(model):
