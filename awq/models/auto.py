@@ -11,8 +11,9 @@ AWQ_CAUSAL_LM_MODEL_MAP = {
     "falcon": FalconAWQForCausalLM,
     "bloom": BloomAWQForCausalLM,
     "gptj": GPTJAWQForCausalLM,
-    "mistral": MistralAWQForCausalLM
-
+    "mistral": MistralAWQForCausalLM,
+    "yi":YiAWQForCausalLM,
+    "qwen":QwenAWQForCausalLM
 }
 
 def check_and_get_model_type(model_dir, trust_remote_code=True):

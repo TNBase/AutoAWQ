@@ -323,15 +323,6 @@ class BaseAWQForCausalLM(nn.Module):
                 device_map='balanced', 
                 no_split_module_classes=[self.layer_type]
             )
-
-            for obj in gc.get_objects():
-                try:
-                    if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
-                        print(type(obj), obj.size())
-                except:
-                    pass
-            
-            import pdb; pdb.set_trace() 
             
             if fuse_layers:
                 self.fuse_layers(model)
