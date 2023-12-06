@@ -287,7 +287,7 @@ class BaseAWQForCausalLM(nn.Module):
             config.max_new_tokens = max_new_tokens
         
         # [STEP 3] Load model
-        with init_empty_weights():
+        with torch.device('cpu'):
             model = AutoModelForCausalLM.from_config(config=config, torch_dtype=torch_dtype, trust_remote_code=trust_remote_code)
         
         # Only need to replace layers if a model is AWQ quantized
@@ -296,7 +296,6 @@ class BaseAWQForCausalLM(nn.Module):
             self._load_quantized_modules(self, model, quant_config)
         
         model.tie_weights()
-        model.to('cpu')
 
         device_map = infer_auto_device_map(
             model,
